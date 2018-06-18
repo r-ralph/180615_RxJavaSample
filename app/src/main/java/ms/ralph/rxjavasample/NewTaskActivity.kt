@@ -25,22 +25,20 @@ class NewTaskActivity : AppCompatActivity() {
 
         btn_send.setOnClickListener { onSendButtonClicked() }
 
-        imageUploadTask = Single.create<Long> { it.onSuccess(uploadImage("")) } // 画像投稿のSingleを作る
+        val hotImageUploadTask = Single.fromCallable { uploadImage("") } // 画像投稿のSingleを作る
             .subscribeOn(Schedulers.io()) // ↑の uploadImage はI/Oスレッドで実行
             .toObservable() // Observableに変換（下のreplayのため）
             .replay()  // Observableで流れてきた値をキャッシュする
-            .apply { connect() } // Observable の処理を開始する
-            .singleOrError() // Singleに変換する
+        hotImageUploadTask.connect()// Observable の処理を開始する
+
+        imageUploadTask = hotImageUploadTask.singleOrError() // Singleに変換する
     }
 
     fun onSendButtonClicked() {
         imageUploadTask
             .observeOn(Schedulers.io()) // これより下の処理を I/O スレッドで行う
             .flatMap { id ->
-                Single.create<String> {
-                    sendComment("", id)// 画像アップロードの結果の imageId を使用してコメント送信
-                    it.onSuccess("")
-                }
+                Single.fromCallable { sendComment("", id) } // 画像アップロードの結果の imageId を使用してコメント送信
             }
             .observeOn(AndroidSchedulers.mainThread()) // これより下の処理を UIスレッドで行う
             .doOnSubscribe { showDialog() } //  このSingleをsubscribeしたタイミングでダイアログ表示
